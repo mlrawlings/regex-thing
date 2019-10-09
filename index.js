@@ -87,16 +87,94 @@ const pxProps = [
   "y"
 ].filter(prop => !numericProps.includes(prop));
 
+const more1 = [ 'connumeration-simplicial',
+'recognizors-oratorical',
+'sandhill',
+'glam',
+'eliads-labiality',
+'extensification',
+'hyperexcretion-acceptabilities',
+'echocardiography',
+'anchoring-disagreement',
+'rotunded-depicting',
+'medullas-malaroma',
+'miscolours',
+'unseen',
+'snitch',
+'chappatis-fastens',
+'chunkier-overmanaging',
+'costivenesses-nulliparae',
+'endocrinal',
+'teriyaki',
+'chamberpot',
+'pinakoidal-dacoities',
+'hyperplanes',
+'inhabitancies',
+'gardenfuls',
+'ingressive-eyewink' ];
+
+const more2 = [ 'humoresques',
+'algebraist',
+'achalasia',
+'off-meagernesses',
+'tallats-scaffs',
+'cooled',
+'dwiles-inessive',
+'smallholders-cheerfulness',
+'chott',
+'glitziness-jeanettes',
+'buccally-sandpipers',
+'teocallis-pisos',
+'disavouching',
+'versing-hatreds',
+'conductress-malentendu',
+'deaeration',
+'apportioned',
+'mailmerges',
+'sponge-weathercloth',
+'bashfully-skrimping',
+'bioluminescent-piecener',
+'dilative',
+'headachier',
+'unman-freecycling',
+'camorrista',
+'liturgy-invectives',
+'dewberries-catafalco',
+'pryse',
+'virtuosas',
+'democratize',
+'stomates',
+'clinics-tuboplasty',
+'intracardiac-isopycnal',
+'unwarrantable-teliospore',
+'interess-warrantable',
+'imbibitions',
+'copulated-shankpiece',
+'parkis',
+'maidservant',
+'tempestuousness-appartements' ];
+
+// console.log(Array(40).fill(0).map(() => Math.random() < 0.5 ? randomWord() : randomWord() + "-" + randomWord()));
+
 const startOrEnd = /\^|\$/;
 
-const a = numericProps || Array(25).fill(0).map(randomWord);
-const b = pxProps || Array(50).fill(0).map(randomWord).filter(b => !a.includes(b));
-console.log(a);
-console.log(b);
-const regex = getRegex(a, b);
-console.log(regex, regex.toString().length, a.join().length);
-const reverse = getRegex(b, a);
-console.log(reverse, reverse.toString().length, b.join().length);
+// const a = numericProps || Array(25).fill(0).map(randomWord);
+// const b = pxProps || Array(50).fill(0).map(randomWord).filter(b => !a.includes(b));
+// console.log(a);
+// console.log(b);
+test(numericProps, pxProps);
+test(more1, more2);
+test(numericProps, more1);
+test(numericProps, more2);
+test(pxProps, more1);
+test(pxProps, more2);
+
+function test(a, b) {
+  const regex = getRegex(a, b);
+  console.log(regex, regex.toString().length, a.join().length, b.join().length);
+  const reverse = getRegex(b, a);
+  console.log(reverse, reverse.toString().length, b.join().length, a.join().length);
+}
 
 function getRegex(includeList, excludeList) {
   let bad;
@@ -192,7 +270,7 @@ function filterPartialsByLength(allPartials) {
  * @param {Array<string[]>} allPartials 
  */
 function findBestPartials(allPartials) {
-  let result = allPartials.map(partials => partials.map(p => ({ value: p })));
+  let result = allPartials.map(partials => partials.map(p => ({ value: p, estimatedSize: p.length })));
 
   do {
     result = result.map((partials, index) => partials.map(partial => {
@@ -200,41 +278,52 @@ function findBestPartials(allPartials) {
         return partial;
       }
       const value = partial.value;
-      let count = 0;
-      let minAddedSize = value.length;
+      const matches = [{ size:value.length, chance:1 }];
       for (let i = 0; i < result.length; i++) {
         if (i !== index) {
           const other = result[i];
           for (let size = value.length; size > 0; size--) {
             const substring = value.slice(0, size);
-            if (other.some(o => o.value.indexOf(substring) === 0)) {
-              count += size/value.length;
-              if (minAddedSize > value.length - size) {
-                minAddedSize = value.length - size;
-              }
+            const otherIndex = other.findIndex(o => o.value.indexOf(substring) === 0);
+            if (otherIndex !== -1) {
+              const ratio = (other.length-otherIndex)/Math.pow(other.length, 1.5);
+              matches.push({ size:value.length - size, chance: ratio });
               break;
             }
           }
         }
       }
-      return { value, estimatedSize: (count*minAddedSize + value.length)/(count+1) };
+      matches.sort((a, b) => a.size - b.size);
+      let estimatedSize = 0;
+      let done = 0; 
+      for (const { size, chance } of matches) {
+        const ratio = (1-done) * chance;
+        estimatedSize += size * ratio;
+        done += ratio;
+      }
+      return { value, estimatedSize };
     }).sort((a, b) => a.estimatedSize - b.estimatedSize));
+
+    for (let partials of result) {
+      if (partials.length > 1) {
+        partials[0].savings = partials[1].estimatedSize - partials[0].estimatedSize;
+      } else {
+        partials[0].savings = Infinity;
+      }
+    }
 
     let bestMatch;
 
     for (let partials of result) {
-      if (!partials[0].locked && (!bestMatch || partials[0].estimatedSize < bestMatch.estimatedSize)) {
+      // if (!partials[0].locked && (!bestMatch || partials[0].estimatedSize < bestMatch.estimatedSize)) {
+      if (!partials[0].locked && (!bestMatch || partials[0].savings > bestMatch.savings)) {
         bestMatch = partials[0];
       }
     }
 
-    if (bestMatch.value === "^or") {
-      console.log(result);
-    }
-
     result = result.map(partials => {
-      if (partials[0].value === bestMatch.value) {
-        return [{ ...partials[0], locked: true }];
+      if (partials.some(p => p.value === bestMatch.value)) {
+        return [{ ...bestMatch, locked: true }];
       }
       return partials;
     });
