@@ -1,0 +1,50 @@
+{
+  "numericProps/pxProps": {
+    "small": "/^(or|li|z)|n(-c|k)|do|ab|w$|we|i[mt]/",
+    "default": "/animation\\-iteration\\-count|shape\\-image\\-threshold|(?:border\\-image\\-outse|stroke\\-miterlimi|line\\-heigh|font\\-weigh)t|border\\-image\\-(?:width|slice)|stroke\\-opacity|f(?:l(?:ood\\-opacity|ex\\-(?:shrink|grow))|ill\\-opacity)|column\\-count|stop\\-opacity|tab\\-size|z(?:\\-index|oom)|or(?:phans|der)|opacity|widows/"
+  },
+  "pxProps/numericProps": {
+    "small": "/(^wid|f)t|k(e-w|g)|t(-[is]|l|t)|[np]-w|^[hmprxy]|c[xy]|n$|ng|p$|-[abdr]/",
+    "default": "/b(?:o(?:rder\\-(?:bottom\\-(?:right\\-radius|left\\-radius|width)|top\\-(?:right\\-radius|left\\-radius|width)|(?:righ|lef)t\\-width)|ttom)|a(?:ckground\\-size|seline\\-shift))|(?:column\\-rule|(?:outlin|strok)e|column|m(?:in|ax))\\-width|(?:grid\\-auto\\-(?:column|row)|flex\\-basi)s|(?:stroke\\-dashoffse|outline\\-offse|(?:padding|margin)\\-righ|text\\-inden|(?:m(?:in|ax)\\-)?heigh|righ|lef)t|(?:offset\\-distanc|perspectiv)e|letter\\-spacing|(?:padding|margin)\\-bottom|vertical\\-align|shape\\-margin|word\\-spacing|(?:padding|margin)\\-left|(?:padding\\-|margin\\-)?top|c(?:olumn\\-gap|[xy])|font\\-size|row\\-gap|width|r[xy]|r|[xy]/"
+  },
+  "numericProps/random1": {
+    "small": "/b-|o[kp]|^[flowz]|-[ci]/",
+    "default": "/animation\\-iteration\\-count|shape\\-image\\-threshold|(?:border\\-image\\-outse|stroke\\-miterlimi|line\\-heigh|font\\-weigh)t|border\\-image\\-(?:width|slice)|stroke\\-opacity|f(?:l(?:ood\\-opacity|ex\\-(?:shrink|grow))|ill\\-opacity)|column\\-count|stop\\-opacity|tab\\-size|z(?:\\-index|oom)|or(?:phans|der)|opacity|widows/"
+  },
+  "random1/numericProps": {
+    "small": "/ng|ch|i[esy]|en|l$|la/",
+    "default": "/(?:hyper(?:excretion\\-acceptabiliti|plan)e|pinakoidal\\-dacoitie|inhabitancie|miscolour|gardenful)s|c(?:o(?:stivenesses\\-nulliparae|nnumeration\\-simplicial)|h(?:unkier\\-overmanaging|a(?:ppatis\\-fastens|mberpot)))|anchoring\\-disagreement|(?:recognizors\\-oratoric|endocrin)al|ingressive\\-eyewink|rotunded\\-depicting|medullas\\-malaroma|e(?:chocardiography|liads\\-labiality|xtensification)|teriyaki|sandhill|unseen|snitch|glam/"
+  },
+  "numericProps/random2": {
+    "small": "/^(or|[fwz])|i(ty|m[ai]|g)|b-|mn/",
+    "default": "/animation\\-iteration\\-count|shape\\-image\\-threshold|(?:border\\-image\\-outse|stroke\\-miterlimi|line\\-heigh|font\\-weigh)t|border\\-image\\-(?:width|slice)|stroke\\-opacity|f(?:l(?:ood\\-opacity|ex\\-(?:shrink|grow))|ill\\-opacity)|column\\-count|stop\\-opacity|tab\\-size|z(?:\\-index|oom)|or(?:phans|der)|opacity|widows/"
+  },
+  "random2/numericProps": {
+    "small": "/e(s$|d|n)|^[dip]|c[ahl]|a[irs]/",
+    "default": "/(?:t(?:e(?:mpestuousness\\-appartement|ocallis\\-piso)|allats\\-scaff)|smallholders\\-cheerfulnes|buccally\\-sandpiper|v(?:ersing\\-hatred|irtuosa)|imbibition|parki)s|(?:unwarrantable\\-teliospor|interess\\-warrantabl|d(?:wiles\\-inessiv|emocratiz|ilativ)|prys)e|bioluminescent\\-piecener|c(?:o(?:nductress\\-malentendu|pulated\\-shankpiece)|linics\\-tuboplasty)|intracardiac\\-isopycnal|d(?:e(?:wberries\\-catafalco|aeration)|isavouching)|(?:glitziness\\-jeanett|liturgy\\-invectiv|off\\-meagerness|mailmerg|stomat)es|(?:bashfully\\-skrimp|unman\\-freecycl)ing|sponge\\-weathercloth|(?:maidservan|chot)t|a(?:pportioned|lgebraist|chalasia)|h(?:umoresques|eadachier)|camorrista|cooled/"
+  },
+  "pxProps/random1": {
+    "small": "/r$|ry|s[hp]|-b|cy|[du]t|le|[px]$|ig|t-|^[by]/",
+    "default": "/b(?:o(?:rder\\-(?:bottom\\-(?:right\\-radius|left\\-radius|width)|top\\-(?:right\\-radius|left\\-radius|width)|(?:righ|lef)t\\-width)|ttom)|a(?:ckground\\-size|seline\\-shift))|(?:column\\-rule|(?:outlin|strok)e|column|m(?:in|ax))\\-width|(?:grid\\-auto\\-(?:column|row)|flex\\-basi)s|(?:stroke\\-dashoffse|outline\\-offse|(?:padding|margin)\\-righ|text\\-inden|(?:m(?:in|ax)\\-)?heigh|righ|lef)t|(?:offset\\-distanc|perspectiv)e|letter\\-spacing|(?:padding|margin)\\-bottom|vertical\\-align|shape\\-margin|word\\-spacing|(?:padding|margin)\\-left|(?:padding\\-|margin\\-)?top|c(?:olumn\\-gap|[xy])|font\\-size|row\\-gap|width|r[xy]|r|[xy]/"
+  },
+  "random1/pxProps": {
+    "small": "/ch|e[eps]|a[kt]|l($|[aos])/",
+    "default": "/(?:hyper(?:excretion\\-acceptabiliti|plan)e|pinakoidal\\-dacoitie|inhabitancie|miscolour|gardenful)s|c(?:o(?:stivenesses\\-nulliparae|nnumeration\\-simplicial)|h(?:unkier\\-overmanaging|a(?:ppatis\\-fastens|mberpot)))|anchoring\\-disagreement|(?:recognizors\\-oratoric|endocrin)al|ingressive\\-eyewink|rotunded\\-depicting|medullas\\-malaroma|e(?:chocardiography|liads\\-labiality|xtensification)|teriyaki|sandhill|unseen|snitch|glam/"
+  },
+  "pxProps/random2": {
+    "small": "/sp[ae]|^(cy|[fry])|-d|gi|[mp]$|ig|[dfu]t|ro|x/",
+    "default": "/b(?:o(?:rder\\-(?:bottom\\-(?:right\\-radius|left\\-radius|width)|top\\-(?:right\\-radius|left\\-radius|width)|(?:righ|lef)t\\-width)|ttom)|a(?:ckground\\-size|seline\\-shift))|(?:column\\-rule|(?:outlin|strok)e|column|m(?:in|ax))\\-width|(?:grid\\-auto\\-(?:column|row)|flex\\-basi)s|(?:stroke\\-dashoffse|outline\\-offse|(?:padding|margin)\\-righ|text\\-inden|(?:m(?:in|ax)\\-)?heigh|righ|lef)t|(?:offset\\-distanc|perspectiv)e|letter\\-spacing|(?:padding|margin)\\-bottom|vertical\\-align|shape\\-margin|word\\-spacing|(?:padding|margin)\\-left|(?:padding\\-|margin\\-)?top|c(?:olumn\\-gap|[xy])|font\\-size|row\\-gap|width|r[xy]|r|[xy]/"
+  },
+  "random2/pxProps": {
+    "small": "/^i|tu|p[ir]|e[ds]|ch|a[it]|r[ekr]/",
+    "default": "/(?:t(?:e(?:mpestuousness\\-appartement|ocallis\\-piso)|allats\\-scaff)|smallholders\\-cheerfulnes|buccally\\-sandpiper|v(?:ersing\\-hatred|irtuosa)|imbibition|parki)s|(?:unwarrantable\\-teliospor|interess\\-warrantabl|d(?:wiles\\-inessiv|emocratiz|ilativ)|prys)e|bioluminescent\\-piecener|c(?:o(?:nductress\\-malentendu|pulated\\-shankpiece)|linics\\-tuboplasty)|intracardiac\\-isopycnal|d(?:e(?:wberries\\-catafalco|aeration)|isavouching)|(?:glitziness\\-jeanett|liturgy\\-invectiv|off\\-meagerness|mailmerg|stomat)es|(?:bashfully\\-skrimp|unman\\-freecycl)ing|sponge\\-weathercloth|(?:maidservan|chot)t|a(?:pportioned|lgebraist|chalasia)|h(?:umoresques|eadachier)|camorrista|cooled/"
+  },
+  "random1/random2": {
+    "small": "/en($|s)|abi|^(mi|s[an]|e)|r[op]|g[ar]|ak|m$|-o|nu/",
+    "default": "/(?:hyper(?:excretion\\-acceptabiliti|plan)e|pinakoidal\\-dacoitie|inhabitancie|miscolour|gardenful)s|c(?:o(?:stivenesses\\-nulliparae|nnumeration\\-simplicial)|h(?:unkier\\-overmanaging|a(?:ppatis\\-fastens|mberpot)))|anchoring\\-disagreement|(?:recognizors\\-oratoric|endocrin)al|ingressive\\-eyewink|rotunded\\-depicting|medullas\\-malaroma|e(?:chocardiography|liads\\-labiality|xtensification)|teriyaki|sandhill|unseen|snitch|glam/"
+  },
+  "random2/random1": {
+    "small": "/a(te|ll|ch|i)|ib|t[rt]|^[bdl]|r[knrty]|le|cl|q/",
+    "default": "/(?:t(?:e(?:mpestuousness\\-appartement|ocallis\\-piso)|allats\\-scaff)|smallholders\\-cheerfulnes|buccally\\-sandpiper|v(?:ersing\\-hatred|irtuosa)|imbibition|parki)s|(?:unwarrantable\\-teliospor|interess\\-warrantabl|d(?:wiles\\-inessiv|emocratiz|ilativ)|prys)e|bioluminescent\\-piecener|c(?:o(?:nductress\\-malentendu|pulated\\-shankpiece)|linics\\-tuboplasty)|intracardiac\\-isopycnal|d(?:e(?:wberries\\-catafalco|aeration)|isavouching)|(?:glitziness\\-jeanett|liturgy\\-invectiv|off\\-meagerness|mailmerg|stomat)es|(?:bashfully\\-skrimp|unman\\-freecycl)ing|sponge\\-weathercloth|(?:maidservan|chot)t|a(?:pportioned|lgebraist|chalasia)|h(?:umoresques|eadachier)|camorrista|cooled/"
+  }
+}
