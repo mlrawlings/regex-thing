@@ -111,7 +111,7 @@ function findBestPartials(allPartials) {
             const substring = value.slice(0, size);
             const otherIndex = other.findIndex(o => o.value.indexOf(substring) === 0);
             if (otherIndex !== -1) {
-              const ratio = (other.length-otherIndex)/Math.pow(other.length, 1.5);
+              const ratio = (other.length-otherIndex)/Math.pow(other.length, 1.2);
               matches.push({ size:value.length - size, chance: ratio });
               break;
             }

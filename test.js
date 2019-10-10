@@ -186,6 +186,7 @@ function testAll() {
     }
   }
   let update = false;
+  let total = 0;
   for(let key in currents) {
     const current = currents[key];
     const best = bests[key];
@@ -201,8 +202,11 @@ function testAll() {
     if (!best || currentLength < bestLength) {
       update = true;
       bests[key] = current;
+    } else {
+      total += currentLength - bestLength;
     }
   }
+  console.log("Additional Chars:", total);
   if (update) {
     fs.writeFileSync(bestsPath, JSON.stringify(bests, null, 2));
   }
