@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Regex Compressor</title>
+  <style>
+    :root {
+      --bg: #f9fafb;
+      --surface: #fff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --match-bg: #fef08a;
+      --fail: #dc2626;
+      --fail-bg: #fef2f2;
+      --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 24px;
+    }
+    h1 { font-size: 17px; font-weight: 600; margin-bottom: 20px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-head {
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+    .panel-head .count { font-weight: 400; }
+
+    textarea {
+      display: block;
+      width: 100%;
+      height: 220px;
+      border: none;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      padding: 10px 12px;
+      resize: vertical;
+      background: transparent;
+      color: var(--text);
+      line-height: 1.75;
+    }
+    textarea:focus { outline: none; }
+
+    /* ── Regex bar ── */
+    .regex-bar {
+      margin: 14px 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .regex-inner {
+      padding: 11px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 46px;
+    }
+    .regex-value {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+      word-break: break-all;
+      flex: 1;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-blue { background: #eff6ff; color: #1d4ed8; }
+    .copy-btn {
+      font-size: 11px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: none;
+      cursor: pointer;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.1s;
+    }
+    .copy-btn:hover { background: var(--bg); }
+    .muted { color: var(--muted); font-style: italic; font-size: 13px; }
+    .error { color: var(--fail); font-size: 13px; }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 13px; height: 13px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* ── Word lists ── */
+    .word-list {
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.85;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .word { white-space: nowrap; }
+    .word-miss { color: var(--fail); }
+    .word-miss::after { content: ' ✗'; font-size: 11px; }
+    .word-excl { color: var(--muted); }
+    .word-excl-hit { color: var(--fail); background: var(--fail-bg); border-radius: 3px; padding: 0 2px; }
+    .word-excl-hit::after { content: ' — matches!'; font-size: 11px; font-style: italic; }
+    mark {
+      background: var(--match-bg);
+      border-radius: 2px;
+      padding: 0 1px;
+      color: inherit;
+    }
+    .empty-note { color: var(--muted); font-style: italic; font-size: 12px; padding: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>Regex Compressor</h1>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head">
+        <span>Include</span>
+        <span class="count" id="inc-count"></span>
+      </div>
+      <textarea id="include" spellcheck="false"></textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <span>Exclude</span>
+        <span class="count" id="exc-count"></span>
+      </div>
+      <textarea id="exclude" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="regex-bar">
+    <div class="panel-head">
+      <span>Regex</span>
+      <span class="badge badge-blue" id="regex-len" style="display:none"></span>
+    </div>
+    <div class="regex-inner">
+      <span class="regex-value" id="regex-display">
+        <span class="muted">Enter words above.</span>
+      </span>
+      <button class="copy-btn" id="copy-btn" style="display:none" onclick="copyRegex()">Copy</button>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head">Include — match highlights</div>
+      <div class="word-list" id="inc-list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">Exclude — must not match</div>
+      <div class="word-list" id="exc-list"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── Default data ──────────────────────────────────────────────────────────
+    const DEFAULTS = {
+      include: `animation-iteration-count
+border-image-outset
+border-image-slice
+border-image-width
+column-count
+fill-opacity
+flex-grow
+flex-shrink
+flood-opacity
+font-weight
+line-height
+opacity
+order
+orphans
+shape-image-threshold
+stop-opacity
+stroke-miterlimit
+stroke-opacity
+tab-size
+widows
+z-index
+zoom`,
+      exclude: `background-size
+baseline-shift
+border-bottom-left-radius
+border-bottom-right-radius
+border-bottom-width
+border-left-width
+border-right-width
+border-top-left-radius
+border-top-right-radius
+border-top-width
+bottom
+column-gap
+column-rule-width
+column-width
+cx
+cy
+flex-basis
+font-size
+grid-auto-columns
+grid-auto-rows
+height
+left
+letter-spacing
+margin-bottom
+margin-left
+margin-right
+margin-top
+max-height
+max-width
+min-height
+min-width
+offset-distance
+outline-offset
+outline-width
+padding-bottom
+padding-left
+padding-right
+padding-top
+perspective
+r
+right
+row-gap
+rx
+ry
+shape-margin
+stroke-dashoffset
+stroke-width
+text-indent
+top
+vertical-align
+width
+word-spacing
+x
+y`
+    };
+
+    document.getElementById('include').value = DEFAULTS.include;
+    document.getElementById('exclude').value = DEFAULTS.exclude;
+
+    // ── Elements ─────────────────────────────────────────────────────────────
+    const incTA    = document.getElementById('include');
+    const excTA    = document.getElementById('exclude');
+    const regexEl  = document.getElementById('regex-display');
+    const regexLen = document.getElementById('regex-len');
+    const copyBtn  = document.getElementById('copy-btn');
+    const incList  = document.getElementById('inc-list');
+    const excList  = document.getElementById('exc-list');
+    const incCount = document.getElementById('inc-count');
+    const excCount = document.getElementById('exc-count');
+
+    let currentRegex = '';
+    let timer, abortCtrl;
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    function lines(el) {
+      return el.value.trim().split('\n').map(s => s.trim()).filter(Boolean);
+    }
+
+    function highlightMatch(word, re) {
+      const m = word.match(re);
+      if (!m) return null;
+      const i = m.index, len = m[0].length;
+      return esc(word.slice(0, i))
+        + '<mark>' + esc(word.slice(i, i + len)) + '</mark>'
+        + esc(word.slice(i + len));
+    }
+
+    // ── Render results ────────────────────────────────────────────────────────
+    function renderResults(incWords, excWords, regexStr) {
+      const m = regexStr.match(/^\/(.+)\/([gimsuy]*)$/s);
+      if (!m) return;
+      const re = new RegExp(m[1], m[2]);
+
+      incList.innerHTML = incWords.map(w => {
+        const h = highlightMatch(w, re);
+        return h
+          ? `<div class="word">${h}</div>`
+          : `<div class="word word-miss">${esc(w)}</div>`;
+      }).join('');
+
+      if (excWords.length === 0) {
+        excList.innerHTML = '<div class="empty-note">No exclude words.</div>';
+        return;
+      }
+      excList.innerHTML = excWords.map(w => {
+        const hit = re.test(w);
+        return `<div class="word ${hit ? 'word-excl-hit' : 'word-excl'}">${esc(w)}</div>`;
+      }).join('');
+    }
+
+    // ── Compute ───────────────────────────────────────────────────────────────
+    async function compute() {
+      const incWords = lines(incTA);
+      const excWords = lines(excTA);
+      incCount.textContent = incWords.length ? `${incWords.length}` : '';
+      excCount.textContent = excWords.length ? `${excWords.length}` : '';
+
+      if (incWords.length === 0) {
+        regexEl.innerHTML = '<span class="muted">Enter words above.</span>';
+        regexLen.style.display = 'none';
+        copyBtn.style.display = 'none';
+        incList.innerHTML = '';
+        excList.innerHTML = '';
+        return;
+      }
+
+      regexEl.innerHTML = '<span class="spinner"></span><span class="muted">Computing…</span>';
+      regexLen.style.display = 'none';
+      copyBtn.style.display = 'none';
+
+      if (abortCtrl) abortCtrl.abort();
+      abortCtrl = new AbortController();
+
+      try {
+        const res = await fetch('/regex', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ includeList: incWords, excludeList: excWords }),
+          signal: abortCtrl.signal,
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          regexEl.innerHTML = `<span class="error">${esc(data.error)}</span>`;
+          return;
+        }
+
+        currentRegex = data.regex;
+        regexEl.textContent = currentRegex;
+        regexLen.textContent = `${currentRegex.length} chars`;
+        regexLen.style.display = '';
+        copyBtn.style.display = '';
+
+        renderResults(incWords, excWords, currentRegex);
+
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        regexEl.innerHTML = `<span class="error">${esc(e.message)}</span>`;
+      }
+    }
+
+    function schedule() {
+      clearTimeout(timer);
+      timer = setTimeout(compute, 500);
+    }
+
+    function copyRegex() {
+      navigator.clipboard.writeText(currentRegex).catch(() => {});
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+    }
+
+    incTA.addEventListener('input', schedule);
+    excTA.addEventListener('input', schedule);
+
+    compute();
+  </script>
+</body>
+</html>
