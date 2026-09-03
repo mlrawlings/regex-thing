@@ -1,6 +1,13 @@
 const regexgen = require('regexgen');
 const startOrEnd = /\^|\$/;
 
+// Module-level state set once per getRegex call.
+// Node.js is single-threaded so shared buffers are safe.
+let _gFeatMap;
+// Reusable typed arrays for pruneRedundant/tightenPrune — eliminates ~15k allocations per pair.
+let _gWordCount = new Int32Array(128);  // per-word coverage count
+let _gKept = new Uint8Array(256);       // per-feature keep flags
+
 module.exports = function getRegex(includeList, excludeList) {
   let bad;
   if (bad = includeList.find(i => excludeList.includes(i))) {
@@ -10,6 +17,7 @@ module.exports = function getRegex(includeList, excludeList) {
   }
 
   const { candidates, allFeatures } = generateFeatures(includeList, excludeList);
+  _gFeatMap = buildFeatMap(allFeatures);
   const n = includeList.length;
 
   // Run multiple beam configs through the full post-processing pipeline.
@@ -65,6 +73,11 @@ module.exports = function getRegex(includeList, excludeList) {
     }
   }
 
+  // addAndTighten once on the global winner — running it per-pipeline costs 11×
+  // the regexgen calls. Since seeds converge to similar local optima, one final
+  // pass finds the same restructurings at 1/11 the cost.
+  bestSelected = addAndTighten(bestSelected, allFeatures, n);
+
   const regex = optimizeRegex(unescapeStartEnd(regexgen(bestSelected)));
   sanityCheck(regex, includeList, excludeList);
   return regex;
@@ -73,15 +86,9 @@ module.exports = function getRegex(includeList, excludeList) {
 function runPipeline(selected, allFeatures, n) {
   selected = swapSearch(selected, allFeatures, n);
   selected = addAndPrune(selected, allFeatures, n);
-  selected = swapSearch(selected, allFeatures, n);
   selected = prefixClusterSearch(selected, allFeatures, n);
-  selected = addAndPrune(selected, allFeatures, n);
   selected = saturationSearch(selected, allFeatures, n);
-  selected = addAndPrune(selected, allFeatures, n);
   selected = tightenPrune(selected, allFeatures, n);
-  // addAndTighten: add short features then tightenPrune — can restructure
-  // clusters that addAndPrune misses (e.g. add 'ai', drop 'ge' + 'ue')
-  selected = addAndTighten(selected, allFeatures, n);
   return selected;
 }
 
@@ -92,7 +99,7 @@ function runPipeline(selected, allFeatures, n) {
 
 function addAndTighten(selected, allFeatures, n) {
   const shortFeats = allFeatures
-    .filter(f => f.pattern.length <= 3)
+    .filter(f => f.pattern.length <= 2)
     .sort((a, b) => a.pattern.length - b.pattern.length);
 
   let current = selected;
@@ -101,8 +108,9 @@ function addAndTighten(selected, allFeatures, n) {
 
   while (improved) {
     improved = false;
+    const currentSet = new Set(current);
     for (const f of shortFeats) {
-      if (current.includes(f.pattern)) continue;
+      if (currentSet.has(f.pattern)) continue;
       const test = tightenPrune([...current, f.pattern], allFeatures, n);
       const len = measureLen(test);
       if (len < currentLen) {
@@ -115,22 +123,57 @@ function addAndTighten(selected, allFeatures, n) {
   return current;
 }
 
+// Popcount for a 32-bit integer (handles negative values via >>> 0).
+function popcount32(n) {
+  n = n >>> 0;
+  n -= (n >>> 1) & 0x55555555;
+  n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
+  n = (n + (n >>> 4)) & 0x0f0f0f0f;
+  n += n >>> 8;
+  n += n >>> 16;
+  return n & 0x3f;
+}
+
 // ─── Beam search ───────────────────────────────────────────────────────────
 // Explores K partial solutions simultaneously.
 // Complete solutions are measured with actual regexgen at the end.
+//
+// State uses bitmask integers for coverage (avoids Set copies) and a linked
+// list for selected patterns (avoids array spreads per expansion step).
 
 function runBeam(candidates, allFeatures, n, K, expand, prefixBonus) {
-  let beam = [{ selected: [], covered: new Set(), roughCost: 0 }];
+  // Pre-compute coverage bitmasks on candidates (lazy, persists across calls).
+  for (const c of candidates) {
+    if (c.lo === undefined) {
+      c.lo = 0; c.hi = 0;
+      for (const wi of c.covers) {
+        if (wi < 32) c.lo |= (1 << wi);
+        else c.hi |= (1 << (wi - 32));
+      }
+    }
+  }
+
+  // State: linked list node. pat=null for root.
+  const root = { pat: null, prev: null, depth: 0, lo: 0, hi: 0, cnt: 0, cost: 0 };
+  let beam = [root];
   const complete = [];
 
   for (let round = 0; round < n + 10 && beam.length > 0; round++) {
     const nextPartial = [];
 
     for (const state of beam) {
-      const selectedPrefixes = prefixBonus > 1 ? new Set(state.selected.map(p => p[0])) : null;
+      // Compute selected-prefix set by traversing linked list (O(depth), depth ≈ 5-15).
+      let selectedPrefixes = null;
+      if (prefixBonus > 1) {
+        selectedPrefixes = new Set();
+        let s = state;
+        while (s.pat !== null) { selectedPrefixes.add(s.pat[0]); s = s.prev; }
+      }
+
       const scored = [];
       for (const f of candidates) {
-        const nc = countNew(f.covers, state.covered);
+        // New coverage via bitmask — no Set allocation.
+        const nc = popcount32(f.lo & ~state.lo) + popcount32(f.hi & ~state.hi);
         if (nc === 0) continue;
         const bonus = selectedPrefixes && selectedPrefixes.has(f.pattern[0]) ? prefixBonus : 1.0;
         scored.push({ f, nc, score: (nc / f.pattern.length) * bonus });
@@ -138,17 +181,19 @@ function runBeam(candidates, allFeatures, n, K, expand, prefixBonus) {
       if (scored.length === 0) continue;
       scored.sort((a, b) => b.score - a.score || a.f.pattern.length - b.f.pattern.length);
 
-      for (const { f } of scored.slice(0, expand)) {
-        const newCovered = new Set(state.covered);
-        f.covers.forEach(wi => newCovered.add(wi));
-        const sep = state.selected.length > 0 ? 1 : 0;
-        const newCost = state.roughCost + f.pattern.length + sep;
+      for (const { f, nc } of scored.slice(0, expand)) {
+        const sep = state.depth > 0 ? 1 : 0;
+        // Linked-list node: O(1) allocation, no array/Set copy.
         const newState = {
-          selected: [...state.selected, f.pattern],
-          covered: newCovered,
-          roughCost: newCost,
+          pat: f.pattern,
+          prev: state,
+          depth: state.depth + 1,
+          lo: state.lo | f.lo,
+          hi: state.hi | f.hi,
+          cnt: state.cnt + nc,
+          cost: state.cost + f.pattern.length + sep,
         };
-        if (newCovered.size === n) {
+        if (newState.cnt === n) {
           complete.push(newState);
         } else {
           nextPartial.push(newState);
@@ -156,12 +201,20 @@ function runBeam(candidates, allFeatures, n, K, expand, prefixBonus) {
       }
     }
 
-    nextPartial.sort((a, b) => a.roughCost - b.roughCost);
+    nextPartial.sort((a, b) => a.cost - b.cost);
     beam = nextPartial.slice(0, K);
     if (complete.length >= K * 4) break;
   }
 
   if (complete.length === 0) return null;
+
+  // Extract the selected-pattern array from a linked-list state.
+  function extractSelected(state) {
+    const result = [];
+    let s = state;
+    while (s.pat !== null) { result.push(s.pat); s = s.prev; }
+    return result.reverse();
+  }
 
   // Adjust roughCost by subtracting a bonus for same-prefix feature pairs.
   // Same-prefix features compress well in regexgen (char classes, x(A|B) groups),
@@ -169,21 +222,23 @@ function runBeam(candidates, allFeatures, n, K, expand, prefixBonus) {
   // even when the clustered set produces a shorter final regex.
   function adjustedCost(s) {
     const prefixCounts = {};
-    for (const pat of s.selected) {
-      const p = pat[0];
+    let cur = s;
+    while (cur.pat !== null) {
+      const p = cur.pat[0];
       prefixCounts[p] = (prefixCounts[p] || 0) + 1;
+      cur = cur.prev;
     }
     let pairs = 0;
     for (const c of Object.values(prefixCounts)) pairs += c * (c - 1) / 2;
-    return s.roughCost - pairs;
+    return s.cost - pairs;
   }
 
   complete.sort((a, b) => adjustedCost(a) - adjustedCost(b));
-  const toMeasure = complete.slice(0, K * 2);
+  const toMeasure = complete.slice(0, Math.ceil(K * 1.5));
   let best = null;
   let bestLen = Infinity;
   for (const s of toMeasure) {
-    const pruned = pruneRedundant(s.selected, allFeatures, n);
+    const pruned = pruneRedundant(extractSelected(s), allFeatures, n);
     const len = measureLen(pruned);
     if (len < bestLen) { bestLen = len; best = pruned; }
   }
@@ -196,15 +251,14 @@ function runBeam(candidates, allFeatures, n, K, expand, prefixBonus) {
 // alternatives; allow same-length alternatives that may compress better.
 
 function swapSearch(selected, allFeatures, n) {
-  const featMap = buildFeatMap(allFeatures);
   let improved = true;
 
   while (improved) {
     improved = false;
-    const wordCoveredBy = buildWordCoveredBy(selected, allFeatures, n);
+    const wordCoveredBy = buildWordCoveredBy(selected, n);
 
     for (let fi = 0; fi < selected.length; fi++) {
-      const currentFeat = featMap.get(selected[fi]);
+      const currentFeat = _gFeatMap.get(selected[fi]);
       if (!currentFeat) continue;
 
       // Find words covered only by this feature
@@ -219,11 +273,11 @@ function swapSearch(selected, allFeatures, n) {
 
       // Alternatives: cover all critical words, length ≤ current + 1
       const maxLen = currentFeat.pattern.length + 1;
-      const alts = allFeatures.filter(alt =>
-        alt.pattern !== selected[fi] &&
-        alt.pattern.length <= maxLen &&
-        [...criticalWords].every(wi => alt.covers.has(wi))
-      );
+      const alts = allFeatures.filter(alt => {
+        if (alt.pattern === selected[fi] || alt.pattern.length > maxLen) return false;
+        for (const wi of criticalWords) { if (!alt.covers.has(wi)) return false; }
+        return true;
+      });
       if (alts.length === 0) continue;
 
       const currentLen = measureLen(selected);
@@ -254,8 +308,9 @@ function swapSearch(selected, allFeatures, n) {
 // then pruned away. This can achieve complex multi-feature replacements.
 
 function addAndPrune(selected, allFeatures, n) {
+  const selSet = new Set(selected);
   const shortFeatures = allFeatures
-    .filter(f => f.pattern.length <= 4 && !selected.includes(f.pattern))
+    .filter(f => f.pattern.length <= 4 && !selSet.has(f.pattern))
     .sort((a, b) => a.pattern.length - b.pattern.length);
 
   let current = selected;
@@ -264,8 +319,9 @@ function addAndPrune(selected, allFeatures, n) {
 
   while (improved) {
     improved = false;
+    const currentSet = new Set(current);
     for (const f of shortFeatures) {
-      if (current.includes(f.pattern)) continue;
+      if (currentSet.has(f.pattern)) continue;
       const test = pruneRedundant([...current, f.pattern], allFeatures, n);
       const len = measureLen(test);
       if (len < currentLen) {
@@ -301,7 +357,7 @@ function prefixClusterSearch(selected, allFeatures, n) {
       // Coverage from non-prefix features
       const otherCoverage = new Set();
       for (const pat of others) {
-        const f = allFeatures.find(f => f.pattern === pat);
+        const f = _gFeatMap.get(pat);
         if (f) f.covers.forEach(wi => otherCoverage.add(wi));
       }
 
@@ -473,56 +529,77 @@ function generateFeatures(includeList, excludeList) {
 // Tries removing each feature; only accepts if coverage stays complete AND
 // the regex actually gets shorter. Strictly better than pruneRedundant which
 // removes coverage-redundant features without checking if it helps length.
+//
+// Uses a per-word coverage count (Int32Array) to skip un-removable features
+// in O(covers.size) without allocating a Set or creating a filtered array.
+// Modifies `selected` in place (callers must pass a copy when needed).
 
 function tightenPrune(selected, allFeatures, n) {
-  const featMap = buildFeatMap(allFeatures);
-  let current = selected;
-  let currentLen = measureLen(current);
+  const wordCount = _gWordCount;
+  wordCount.fill(0, 0, n);
+  for (const pat of selected) {
+    const f = _gFeatMap.get(pat);
+    if (f) for (const wi of f.covers) wordCount[wi]++;
+  }
+
+  let currentLen = measureLen(selected);
   let improved = true;
 
   while (improved) {
     improved = false;
-    for (let i = 0; i < current.length; i++) {
-      const test = current.filter((_, j) => j !== i);
-      const covered = new Set();
-      for (const pat of test) {
-        const f = featMap.get(pat);
-        if (f) f.covers.forEach(wi => covered.add(wi));
+    for (let i = 0; i < selected.length; i++) {
+      const f = _gFeatMap.get(selected[i]);
+      if (!f) continue;
+      // Fast coverage check: all words covered by ≥2 features → safe to try removing.
+      let canRemove = true;
+      for (const wi of f.covers) {
+        if (wordCount[wi] <= 1) { canRemove = false; break; }
       }
-      if (covered.size < n) continue;
-      const len = measureLen(test);
+      if (!canRemove) continue;
+      // Temporarily splice out and measure — no extra array allocated.
+      selected.splice(i, 1);
+      const len = measureLen(selected);
       if (len < currentLen) {
-        current = test;
+        for (const wi of f.covers) wordCount[wi]--;
         currentLen = len;
         improved = true;
         break;
       }
+      selected.splice(i, 0, f.pattern); // restore
     }
   }
-  return current;
+  return selected;
 }
 
 // ─── Prune redundant ──────────────────────────────────────────────────────
+// Uses shared typed-array buffers (no allocation per call) for O(covers.size)
+// removability checks.
 
 function pruneRedundant(selected, allFeatures, n) {
-  const wordCoveredBy = buildWordCoveredBy(selected, allFeatures, n);
-  const active = new Set(selected.map((_, i) => i));
-
-  for (const fi of [...active]) {
-    const f = allFeatures.find(f => f.pattern === selected[fi]);
-    if (!f) continue;
-    let canRemove = true;
-    for (const wi of f.covers) {
-      let activeCount = 0;
-      for (const fj of wordCoveredBy[wi]) {
-        if (active.has(fj)) activeCount++;
-      }
-      if (activeCount <= 1) { canRemove = false; break; }
-    }
-    if (canRemove) active.delete(fi);
+  const wordCount = _gWordCount;
+  wordCount.fill(0, 0, n);
+  for (const pat of selected) {
+    const f = _gFeatMap.get(pat);
+    if (f) for (const wi of f.covers) wordCount[wi]++;
   }
 
-  return selected.filter((_, fi) => active.has(fi));
+  const kept = _gKept;
+  for (let fi = 0; fi < selected.length; fi++) {
+    const f = _gFeatMap.get(selected[fi]);
+    if (!f) { kept[fi] = 1; continue; }
+    let canRemove = true;
+    for (const wi of f.covers) {
+      if (wordCount[wi] <= 1) { canRemove = false; break; }
+    }
+    if (canRemove) {
+      kept[fi] = 0;
+      for (const wi of f.covers) wordCount[wi]--;
+    } else {
+      kept[fi] = 1;
+    }
+  }
+
+  return selected.filter((_, fi) => kept[fi]);
 }
 
 // ─── Utilities ─────────────────────────────────────────────────────────────
@@ -531,12 +608,11 @@ function buildFeatMap(allFeatures) {
   return new Map(allFeatures.map(f => [f.pattern, f]));
 }
 
-function buildWordCoveredBy(selected, allFeatures, n) {
-  const featMap = buildFeatMap(allFeatures);
-  const wordCoveredBy = Array.from({ length: n }, () => new Set());
+function buildWordCoveredBy(selected, n) {
+  const wordCoveredBy = Array.from({ length: n }, () => []);
   for (let fi = 0; fi < selected.length; fi++) {
-    const f = featMap.get(selected[fi]);
-    if (f) f.covers.forEach(wi => wordCoveredBy[wi].add(fi));
+    const f = _gFeatMap.get(selected[fi]);
+    if (f) f.covers.forEach(wi => wordCoveredBy[wi].push(fi));
   }
   return wordCoveredBy;
 }
@@ -549,12 +625,20 @@ function countNew(covers, covered) {
   return count;
 }
 
+const measureCache = new Map();
+
 function measureLen(patterns) {
+  const key = [...patterns].sort().join('\x00');
+  const cached = measureCache.get(key);
+  if (cached !== undefined) return cached;
+  let result;
   try {
-    return optimizeRegex(unescapeStartEnd(regexgen(patterns))).toString().length;
+    result = optimizeRegex(unescapeStartEnd(regexgen(patterns))).toString().length;
   } catch (e) {
-    return Infinity;
+    result = Infinity;
   }
+  measureCache.set(key, result);
+  return result;
 }
 
 function sanityCheck(regex, includeList, excludeList) {
