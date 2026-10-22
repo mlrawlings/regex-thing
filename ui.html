@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Regex Compressor</title>
+  <style>
+    :root {
+      --bg: #f9fafb;
+      --surface: #fff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --match-bg: #fef08a;
+      --fail: #dc2626;
+      --fail-bg: #fef2f2;
+      --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 24px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: hidden;
+    }
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    h1 { font-size: 17px; font-weight: 600; }
+    #example-select {
+      font-size: 13px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr;
+      gap: 14px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-head {
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+    .panel-head .count { font-weight: 400; }
+
+    /* ── Highlighted include overlay ── */
+    .highlight-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .highlight-backdrop {
+      position: absolute;
+      inset: 0;
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.75;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-y: scroll;
+      overflow-x: hidden;
+      color: transparent;
+      pointer-events: none;
+      scrollbar-width: none;
+      background: var(--surface);
+    }
+    .highlight-backdrop::-webkit-scrollbar { display: none; }
+    .highlight-backdrop mark {
+      background: var(--match-bg);
+      border-radius: 2px;
+    }
+    .highlight-wrap > textarea {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.75;
+      background: transparent;
+      color: var(--text);
+      caret-color: var(--text);
+      border: none;
+      resize: none;
+      overflow-y: scroll;
+      overflow-x: hidden;
+    }
+    .highlight-wrap > textarea:focus { outline: none; }
+
+    /* ── Exclude textarea (plain) ── */
+    .panel > textarea {
+      display: block;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      border: none;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      padding: 10px 12px;
+      resize: none;
+      background: transparent;
+      color: var(--text);
+      line-height: 1.75;
+      overflow-y: auto;
+    }
+    .panel > textarea:focus { outline: none; }
+
+    /* Exclude status in panel header */
+    .exc-ok  { color: #16a34a; }
+    .exc-bad { color: var(--fail); }
+
+    /* ── Regex bar ── */
+    .regex-bar {
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .regex-inner {
+      padding: 11px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 46px;
+    }
+    .regex-value {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+      word-break: break-all;
+      flex: 1;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-blue { background: #eff6ff; color: #1d4ed8; }
+    .copy-btn {
+      font-size: 11px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: none;
+      cursor: pointer;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.1s;
+    }
+    .copy-btn:hover { background: var(--bg); }
+    .muted { color: var(--muted); font-style: italic; font-size: 13px; }
+    .error { color: var(--fail); font-size: 13px; }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: none;
+      width: 11px; height: 11px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+    .computing .spinner { display: inline-block; }
+    .computing #regex-display { opacity: 0.35; }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Regex Compressor</h1>
+    <select id="example-select">
+      <option value="">— examples —</option>
+    </select>
+  </div>
+
+  <div class="regex-bar">
+    <div class="panel-head">
+      <span>Regex <span class="spinner"></span></span>
+      <span class="badge badge-blue" id="regex-len" style="display:none"></span>
+    </div>
+    <div class="regex-inner">
+      <span class="regex-value" id="regex-display">
+        <span class="muted">Enter words above.</span>
+      </span>
+      <button class="copy-btn" id="copy-btn" style="display:none" onclick="copyRegex()">Copy</button>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head">
+        <span>Include</span>
+        <span class="count" id="inc-count"></span>
+      </div>
+      <div class="highlight-wrap">
+        <div class="highlight-backdrop" id="inc-backdrop" aria-hidden="true"></div>
+        <textarea id="include" spellcheck="false"></textarea>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <span>Exclude</span>
+        <span class="count" id="exc-count"></span>
+      </div>
+      <textarea id="exclude" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <script>
+    // ── Word lists ────────────────────────────────────────────────────────────
+    const WORD_LISTS = {
+      numericProps: [
+        'animation-iteration-count','border-image-outset','border-image-slice',
+        'border-image-width','column-count','fill-opacity','flex-grow','flex-shrink',
+        'flood-opacity','font-weight','line-height','opacity','order','orphans',
+        'shape-image-threshold','stop-opacity','stroke-miterlimit','stroke-opacity',
+        'tab-size','widows','z-index','zoom',
+      ],
+      pxProps: [
+        'background-size','baseline-shift','border-bottom-left-radius',
+        'border-bottom-right-radius','border-bottom-width','border-left-width',
+        'border-right-width','border-top-left-radius','border-top-right-radius',
+        'border-top-width','bottom','column-gap','column-rule-width','column-width',
+        'cx','cy','flex-basis','font-size','grid-auto-columns','grid-auto-rows',
+        'height','left','letter-spacing','margin-bottom','margin-left','margin-right',
+        'margin-top','max-height','max-width','min-height','min-width',
+        'offset-distance','outline-offset','outline-width','padding-bottom',
+        'padding-left','padding-right','padding-top','perspective','r','right',
+        'row-gap','rx','ry','shape-margin','stroke-dashoffset','stroke-width',
+        'text-indent','top','vertical-align','width','word-spacing','x','y',
+      ],
+      colorProps: [
+        'background-color','border-bottom-color','border-color','border-left-color',
+        'border-right-color','border-top-color','caret-color','color',
+        'column-rule-color','fill','flood-color','lighting-color','outline-color',
+        'stop-color','stroke','text-decoration-color','text-emphasis-color',
+      ],
+      sizeProps: [
+        'border-bottom-width','border-left-width','border-right-width',
+        'border-top-width','border-width','column-rule-width','column-width',
+        'font-size','gap','height','letter-spacing','line-height','margin',
+        'margin-bottom','margin-left','margin-right','margin-top','max-height',
+        'max-width','min-height','min-width','outline-offset','outline-width',
+        'padding','padding-bottom','padding-left','padding-right','padding-top',
+        'row-gap','text-indent','width','word-spacing',
+      ],
+      voidElements: [
+        'area','base','br','col','embed','hr','img','input','link','meta',
+        'param','source','track','wbr',
+      ],
+      htmlElements: [
+        'a','article','aside','audio','blockquote','button','canvas','code',
+        'details','dialog','div','footer','form','h1','h2','h3','h4','h5','h6',
+        'header','iframe','label','li','main','menu','nav','ol','option','p',
+        'pre','script','section','select','small','span','strong','style',
+        'summary','table','td','textarea','th','tr','ul','video',
+      ],
+      random1: [
+        'connumeration-simplicial','recognizors-oratorical','sandhill','glam',
+        'eliads-labiality','extensification','hyperexcretion-acceptabilities',
+        'echocardiography','anchoring-disagreement','rotunded-depicting',
+        'medullas-malaroma','miscolours','unseen','snitch','chappatis-fastens',
+        'chunkier-overmanaging','costivenesses-nulliparae','endocrinal','teriyaki',
+        'chamberpot','pinakoidal-dacoities','hyperplanes','inhabitancies',
+        'gardenfuls','ingressive-eyewink',
+      ],
+      random2: [
+        'humoresques','algebraist','achalasia','off-meagernesses','tallats-scaffs',
+        'cooled','dwiles-inessive','smallholders-cheerfulness','chott',
+        'glitziness-jeanettes','buccally-sandpipers','teocallis-pisos',
+        'disavouching','versing-hatreds','conductress-malentendu','deaeration',
+        'apportioned','mailmerges','sponge-weathercloth','bashfully-skrimping',
+        'bioluminescent-piecener','dilative','headachier','unman-freecycling',
+        'camorrista','liturgy-invectives','dewberries-catafalco','pryse',
+        'virtuosas','democratize','stomates','clinics-tuboplasty',
+        'intracardiac-isopycnal','unwarrantable-teliospore','interess-warrantable',
+        'imbibitions','copulated-shankpiece','parkis','maidservant',
+        'tempestuousness-appartements',
+      ],
+    };
+
+    // ── Examples dropdown ─────────────────────────────────────────────────────
+    const EXAMPLE_GROUPS = [
+      { label: 'numericProps →', items: ['pxProps'] },
+      { label: 'pxProps →',      items: ['numericProps'] },
+      { label: 'colorProps →',   items: ['sizeProps'] },
+      { label: 'sizeProps →',    items: ['colorProps'] },
+      { label: 'voidElements →', items: ['htmlElements'] },
+      { label: 'htmlElements →', items: ['voidElements'] },
+      { label: 'random1 →',      items: ['random2'] },
+      { label: 'random2 →',      items: ['random1'] },
+    ];
+    const sel = document.getElementById('example-select');
+    EXAMPLE_GROUPS.forEach(({ label, items }) => {
+      const grp = document.createElement('optgroup');
+      grp.label = label;
+      const incName = label.replace(' →', '').trim();
+      items.forEach(excName => {
+        const opt = document.createElement('option');
+        opt.value = `${incName}/${excName}`;
+        opt.textContent = excName;
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
+    });
+
+    // ── Elements ─────────────────────────────────────────────────────────────
+    const incTA    = document.getElementById('include');
+    const excTA    = document.getElementById('exclude');
+    const backdrop = document.getElementById('inc-backdrop');
+    const regexEl  = document.getElementById('regex-display');
+    const regexLen = document.getElementById('regex-len');
+    const copyBtn  = document.getElementById('copy-btn');
+    const incCount = document.getElementById('inc-count');
+    const excCount = document.getElementById('exc-count');
+    const regexBar = document.querySelector('.regex-bar');
+
+    let currentRegex = '';
+    let currentRe    = null;
+    let timer, abortCtrl;
+
+    // ── Load an example ───────────────────────────────────────────────────────
+    function loadExample(key) {
+      if (!key) return;
+      const [incName, excName] = key.split('/');
+      incTA.value = WORD_LISTS[incName].join('\n');
+      excTA.value = WORD_LISTS[excName].join('\n');
+      currentRe = null;
+      updateBackdrop();
+      clearTimeout(timer);
+      timer = setTimeout(compute, 500);
+    }
+
+    sel.addEventListener('change', () => loadExample(sel.value));
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    function lines(el) {
+      return el.value.trim().split('\n').map(s => s.trim()).filter(Boolean);
+    }
+
+    // ── Backdrop update ───────────────────────────────────────────────────────
+    function updateBackdrop() {
+      const value = incTA.value;
+      if (!currentRe) {
+        backdrop.textContent = value;
+        return;
+      }
+      const html = value.split('\n').map(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return esc(line);
+        const m = trimmed.match(currentRe);
+        if (!m) return esc(line);
+        const lead = line.indexOf(trimmed);
+        const i = m.index, len = m[0].length;
+        return esc(line.slice(0, lead + i))
+          + '<mark>' + esc(line.slice(lead + i, lead + i + len)) + '</mark>'
+          + esc(line.slice(lead + i + len));
+      }).join('\n');
+      backdrop.innerHTML = html;
+    }
+
+    incTA.addEventListener('scroll', () => {
+      backdrop.scrollTop  = incTA.scrollTop;
+      backdrop.scrollLeft = incTA.scrollLeft;
+    });
+
+    // ── Render results ────────────────────────────────────────────────────────
+    function renderResults(excWords, regexStr) {
+      const m = regexStr.match(/^\/(.+)\/([gimsuy]*)$/s);
+      if (!m) return;
+      currentRe = new RegExp(m[1], m[2]);
+      updateBackdrop();
+      const hits = excWords.filter(w => currentRe.test(w));
+      if (excWords.length === 0) {
+        excCount.innerHTML = '';
+      } else if (hits.length === 0) {
+        excCount.innerHTML = `<span class="exc-ok">&#10003; none match</span>`;
+      } else {
+        excCount.innerHTML = `<span class="exc-bad">&#9888; ${hits.length} match</span>`;
+      }
+    }
+
+    // ── Compute ───────────────────────────────────────────────────────────────
+    async function compute() {
+      const incWords = lines(incTA);
+      const excWords = lines(excTA);
+      incCount.textContent = incWords.length ? `${incWords.length}` : '';
+      excCount.innerHTML   = excWords.length ? `${excWords.length}` : '';
+
+      if (incWords.length === 0) {
+        regexBar.classList.remove('computing');
+        regexEl.innerHTML = '<span class="muted">Enter words above.</span>';
+        regexLen.style.display = 'none';
+        copyBtn.style.display  = 'none';
+        currentRe = null;
+        updateBackdrop();
+        return;
+      }
+
+      // Dim stale value in place; spinner appears via CSS class — no height change
+      regexBar.classList.add('computing');
+
+      if (abortCtrl) abortCtrl.abort();
+      abortCtrl = new AbortController();
+
+      try {
+        const res = await fetch('/regex', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ includeList: incWords, excludeList: excWords }),
+          signal: abortCtrl.signal,
+        });
+        const data = await res.json();
+
+        regexBar.classList.remove('computing');
+
+        if (data.error) {
+          regexEl.innerHTML = `<span class="error">${esc(data.error)}</span>`;
+          return;
+        }
+
+        currentRegex = data.regex;
+        regexEl.textContent = currentRegex;
+        regexLen.textContent = `${currentRegex.length} chars`;
+        regexLen.style.display = '';
+        copyBtn.style.display  = '';
+
+        renderResults(excWords, currentRegex);
+
+      } catch (e) {
+        regexBar.classList.remove('computing');
+        if (e.name === 'AbortError') return;
+        regexEl.innerHTML = `<span class="error">${esc(e.message)}</span>`;
+      }
+    }
+
+    function schedule() {
+      sel.value = '';
+      updateBackdrop();
+      clearTimeout(timer);
+      timer = setTimeout(compute, 500);
+    }
+
+    function copyRegex() {
+      navigator.clipboard.writeText(currentRegex).catch(() => {});
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+    }
+
+    incTA.addEventListener('input', schedule);
+    excTA.addEventListener('input', schedule);
+
+    // ── Initial load ──────────────────────────────────────────────────────────
+    loadExample('numericProps/pxProps');
+    sel.value = 'numericProps/pxProps';
+  </script>
+</body>
+</html>
